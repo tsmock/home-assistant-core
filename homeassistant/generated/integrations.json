@@ -7902,6 +7902,12 @@
       "config_flow": false,
       "iot_class": "local_polling"
     },
+    "xcelenergy": {
+      "name": "Xcel Energy",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "local_polling"
+    },
     "xeoma": {
       "name": "Xeoma",
       "integration_type": "hub",

@@ -822,6 +822,7 @@ FLOWS = {
         "wsdot",
         "wyoming",
         "xbox",
+        "xcelenergy",
         "xiaomi_aqara",
         "xiaomi_ble",
         "xiaomi_miio",

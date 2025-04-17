@@ -1416,6 +1416,14 @@ DHCP: Final[list[dict[str, str | bool]]] = [
         "hostname": "xbox*",
     },
     {
+        "domain": "xcelenergy",
+        "macaddress": "B42330*",
+    },
+    {
+        "domain": "xcelenergy",
+        "registered_devices": True,
+    },
+    {
         "domain": "yale",
         "hostname": "yale-connect-plus",
         "macaddress": "00177A*",
