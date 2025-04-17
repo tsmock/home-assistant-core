@@ -6,6 +6,7 @@
 import asyncio
 from datetime import timedelta
 import os.path
+import re
 import ssl
 import tempfile
 
@@ -18,6 +19,7 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.core import HassJob, HassJobType, HomeAssistant
 
 from .const import LOGGER
 from .exceptions import CannotConnect
@@ -48,36 +50,26 @@ class ItronApi:
     """An API instance."""
 
     def __init__(
-        self, host: str, certificate: str, key: str, cadata: str = ITRON_CERT
+        self,
+        hass: HomeAssistant,
+        host: str,
+        certificate: str,
+        key: str,
+        cadata: str = ITRON_CERT,
     ) -> None:
         """Initialize the API.
 
         Note that you must wait for the certificates to be loaded prior to network calls
 
+        @param hass The home assistant instance to use for async callsa
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
         @param cadata The root certificate for the self-signed certificate for the power meter
         """
-        self.host: str = host
-        certificate_path: str = ItronApi._check_file(
-            certificate, "xcel_client_certificate.pem"
+        self.session: httpx.Client = ItronApi._generate_session(
+            hass=hass, host=host, certificate=certificate, key=key, cadata=cadata
         )
-        key_path: str = ItronApi._check_file(key, "xcel_client_key.pem")
-        # self.session: asyncio.Future[requests.Session] = asyncio.get_running_loop().run_in_executor(None, ItronApi._generate_session)
-        future_session = asyncio.get_running_loop().run_in_executor(
-            None, ItronApi._generate_session, host, certificate_path, key_path, cadata
-        )
-        future_session.add_done_callback(self._set_session)
-        self.session: httpx.Client | asyncio.Future[httpx.Client] = future_session
-
-    def _set_session(self, future_session: asyncio.Future[httpx.Client]) -> None:
-        if future_session.done():
-            self.session = future_session.result()
-        if future_session.exception():
-            raise future_session.exception()
-        if future_session.cancelled():
-            raise CannotConnect("SSLContext creation cancelled")
 
     async def wait_for_session(self):
         """Wait for the client session to be ready"""
@@ -96,15 +88,16 @@ class ItronApi:
 
     @staticmethod
     def _generate_session(
-        host: str, certificate: str, key: str, cadata: str
+        hass: HomeAssistant, host: str, certificate: str, key: str, cadata: str
     ) -> httpx.Client:
         ctx: ssl.SSLContext = ItronApi.setup_context(
-            certificate=certificate, key=key, cadata=cadata
+            hass=hass, certificate=certificate, key=key, cadata=cadata
         )
         return httpx.Client(verify=ctx, base_url=host)
 
     @staticmethod
     def setup_context(
+        hass: HomeAssistant | None = None,
         certificate: str | None = None,
         key: str | None = None,
         cadata: str = ITRON_CERT,
@@ -124,8 +117,30 @@ class ItronApi:
         # Load the root certificate into memory so we don't have to turn verification off.
         temp_context.load_verify_locations(cadata=cadata)
         if certificate and key:
-            temp_context.load_cert_chain(certificate, key)
+            if hass:
+                hass.async_add_hass_job(
+                    HassJob(
+                        name="Itron: Load certificates",
+                        target=ItronApi._load_certs,
+                        job_type=HassJobType.Executor,
+                    ),
+                    temp_context,
+                    certificate,
+                    key,
+                )
+            else:
+                asyncio.get_event_loop().run_in_executor(
+                    None, ItronApi._load_certs, temp_context, certificate, key
+                )
         return temp_context
+
+    @staticmethod
+    def _load_certs(ctx: ssl.SSLContext, certificate: str, key: str):
+        certificate_path: str = ItronApi._check_file(
+            certificate, "xcel_client_certificate.pem"
+        )
+        key_path: str = ItronApi._check_file(key, "xcel_client_key.pem")
+        ctx.load_cert_chain(certfile=certificate_path, keyfile=key_path)
 
     @staticmethod
     def _check_file(data: str, file_name: str) -> str:
@@ -133,6 +148,17 @@ class ItronApi:
         # So we need to store the client certificate and key to file. For now, we write them to the /tmp directory.
         # If only so that they are (hopefully) cleaned up on reboot.
         if not os.path.isfile(data) and len(data) > 100:
+            # The UI replaces newlines with spaces.
+            if data.startswith("-----BEGIN ") and len(data.splitlines()) == 1:
+                m = re.search("(-----.+?-----)(.+?)(-----.+?-----)", data)
+                data = (
+                    m.group(1)
+                    + os.linesep
+                    + os.linesep.join(m.group(2).strip().split())
+                    + os.linesep
+                    + m.group(3)
+                )
+                LOGGER.info(f"New data for {file_name}: {data}")
             data_path = os.path.join(tempfile.gettempdir(), file_name)
             # Minimize writes; if it already exists and has the right data, we're done.
             if os.path.isfile(data_path):

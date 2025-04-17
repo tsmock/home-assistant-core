@@ -45,6 +45,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # )
 
     api: ItronApi = ItronApi(
+        hass=hass,
         host=data[CONF_HOST],
         certificate=data[CONF_CERTIFICATE],
         key=data[CONF_KEY],

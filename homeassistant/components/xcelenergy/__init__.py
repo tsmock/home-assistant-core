@@ -31,7 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: XcelConfigEntry) -> bool
     client_key: str = entry.data[CONF_KEY]
     client_cert: str = entry.data[CONF_CERTIFICATE]
     api: ItronApi = ItronApi(
-        host=host, key=client_key, certificate=client_cert, cadata=ITRON_CERT
+        hass=hass, host=host, key=client_key, certificate=client_cert, cadata=ITRON_CERT
     )
     await api.wait_for_session()
     power: ItronRivaGen5Power = ItronRivaGen5Power(api)
