@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import CONF_CERTIFICATE, CONF_KEY, DOMAIN
 from .exceptions import CannotConnect, InvalidAuth
-from .itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Consumption
+from .sensor.itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Consumption
 
 _LOGGER = logging.getLogger(__name__)
 

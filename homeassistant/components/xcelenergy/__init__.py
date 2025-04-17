@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONF_CERTIFICATE, CONF_KEY
-from .itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Power
+from .sensor.itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Power
 
 # For your initial PR, limit it to 1 platform.
 _PLATFORMS: list[Platform] = [Platform.SENSOR]

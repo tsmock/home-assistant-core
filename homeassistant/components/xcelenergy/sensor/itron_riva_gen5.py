@@ -18,11 +18,10 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.components.xcelenergy.const import LOGGER
+from homeassistant.components.xcelenergy.exceptions import CannotConnect
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HassJob, HassJobType, HomeAssistant
-
-from .const import LOGGER
-from .exceptions import CannotConnect
 
 # The power reading only has the last second, but HA doesn't allow for <5s/update
 SCAN_INTERVAL = timedelta(seconds=5)
@@ -72,7 +71,7 @@ class ItronApi:
         )
 
     async def wait_for_session(self):
-        """Wait for the client session to be ready"""
+        """Wait for the client session to be ready."""
         while isinstance(self.session, asyncio.Future):
             await asyncio.sleep(0.1)
             future_session = self.session
@@ -140,7 +139,9 @@ class ItronApi:
             certificate, "xcel_client_certificate.pem"
         )
         key_path: str = ItronApi._check_file(key, "xcel_client_key.pem")
+        LOGGER.warning("Loading certificates")
         ctx.load_cert_chain(certfile=certificate_path, keyfile=key_path)
+        LOGGER.warning("Certificates loaded")
 
     @staticmethod
     def _check_file(data: str, file_name: str) -> str:
