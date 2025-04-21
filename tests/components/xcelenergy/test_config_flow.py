@@ -1,6 +1,8 @@
 """Test the Xcel Energy config flow."""
 
+import datetime
 from unittest.mock import AsyncMock, patch
+from xml.etree import ElementTree as ET
 
 from homeassistant import config_entries
 from homeassistant.components.xcelenergy.config_flow import CannotConnect, InvalidAuth
@@ -18,6 +20,22 @@ FIXME: DO NOT COMMIT
 -----END PRIVATE KEY-----"""
 
 
+def patch_fetch(href: str, value: str) -> str:
+    """Generate an XML string to return as text from the fetch call.
+
+    @param href The path requested on the host
+    @param value The value to return
+    """
+    root = ET.Element("Reading", {"xmlns": "urn:ieee:std:2030.5:ns", "href": href})
+    ET.SubElement(root, "qualityFlags").text = "01"
+    time_period = ET.SubElement(root, "timePeriod")
+    ET.SubElement(time_period, "duration").text = "1"
+    ET.SubElement(time_period, "start").text = datetime.datetime.now().strftime("%s")
+    ET.SubElement(root, "value").text = value
+    ET.indent(root, space="    ", level=0)
+    return ET.tostring(root, encoding="unicode")
+
+
 async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
     """Test we get the form."""
     result = await hass.config_entries.flow.async_init(
@@ -28,7 +46,7 @@ async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
 
     with patch(
         "homeassistant.components.xcelenergy.itron_riva_gen5.ItronApi.fetch",
-        return_value=True,
+        return_value=patch_fetch("/upt/1/mr/1/r", "319"),
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -79,7 +97,7 @@ async def test_form_invalid_auth(
     # we can show the config flow is able to recover from an error.
     with patch(
         "homeassistant.components.xcelenergy.itron_riva_gen5.ItronApi.fetch",
-        return_value=True,
+        return_value=patch_fetch("/upt/1/mr/1/r", "319"),
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -131,7 +149,7 @@ async def test_form_cannot_connect(
 
     with patch(
         "homeassistant.components.xcelenergy.itron_riva_gen5.ItronApi.fetch",
-        return_value=True,
+        return_value=patch_fetch("/upt/1/mr/1/r", "319"),
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],

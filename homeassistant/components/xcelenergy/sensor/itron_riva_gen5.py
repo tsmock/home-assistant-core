@@ -18,10 +18,11 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
-from homeassistant.components.xcelenergy.const import LOGGER
-from homeassistant.components.xcelenergy.exceptions import CannotConnect
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HassJob, HassJobType, HomeAssistant
+
+from ..const import LOGGER
+from ..exceptions import CannotConnect, InvalidAuth
 
 # The power reading only has the last second, but HA doesn't allow for <5s/update
 SCAN_INTERVAL = timedelta(seconds=5)
@@ -40,9 +41,6 @@ A1UdEwEB/wQFMAMBAf8wEQYDVR0OBAoECE4E78JKsqrnMAoGCCqGSM49BAMCA0kA
 MEYCIQC4QuurwLz8N3Vp8vQJeTrXTSKplgtW3o+GLpUzbwt2awIhAPHKAZEk3d4c
 55Ksb/AIXwrGwsrbsD75WmfKX9DjOc60
 -----END CERTIFICATE-----"""
-
-
-context: ssl.SSLContext | None = None
 
 
 class ItronApi:
@@ -66,36 +64,26 @@ class ItronApi:
         @param key The client key to use (a path, not the actual key)
         @param cadata The root certificate for the self-signed certificate for the power meter
         """
-        self.session: httpx.Client = ItronApi._generate_session(
+        self.session: httpx.Client = self._generate_session(
             hass=hass, host=host, certificate=certificate, key=key, cadata=cadata
         )
+        self.certs_loaded: bool = False
 
-    async def wait_for_session(self):
+    async def wait_for_session(self) -> None:
         """Wait for the client session to be ready."""
-        while isinstance(self.session, asyncio.Future):
-            await asyncio.sleep(0.1)
-            future_session = self.session
-            if not isinstance(future_session, asyncio.Future):
-                break
-            if future_session.cancelled():
-                raise CannotConnect("SSLContext creation cancelled")
-            if future_session.exception():
-                raise future_session.exception()
-            if self.session.done():
-                self.session = self.session.result()
-                break
+        while not self.certs_loaded:
+            await asyncio.sleep(0.5)
 
-    @staticmethod
     def _generate_session(
-        hass: HomeAssistant, host: str, certificate: str, key: str, cadata: str
+        self, hass: HomeAssistant, host: str, certificate: str, key: str, cadata: str
     ) -> httpx.Client:
-        ctx: ssl.SSLContext = ItronApi.setup_context(
+        ctx: ssl.SSLContext = self._setup_context(
             hass=hass, certificate=certificate, key=key, cadata=cadata
         )
         return httpx.Client(verify=ctx, base_url=host)
 
-    @staticmethod
-    def setup_context(
+    def _setup_context(
+        self,
         hass: HomeAssistant | None = None,
         certificate: str | None = None,
         key: str | None = None,
@@ -117,10 +105,10 @@ class ItronApi:
         temp_context.load_verify_locations(cadata=cadata)
         if certificate and key:
             if hass:
-                hass.async_add_hass_job(
+                hass.async_run_hass_job(
                     HassJob(
                         name="Itron: Load certificates",
-                        target=ItronApi._load_certs,
+                        target=self._load_certs,
                         job_type=HassJobType.Executor,
                     ),
                     temp_context,
@@ -129,19 +117,19 @@ class ItronApi:
                 )
             else:
                 asyncio.get_event_loop().run_in_executor(
-                    None, ItronApi._load_certs, temp_context, certificate, key
+                    None, self._load_certs, temp_context, certificate, key
                 )
         return temp_context
 
-    @staticmethod
-    def _load_certs(ctx: ssl.SSLContext, certificate: str, key: str):
+    def _load_certs(self, ctx: ssl.SSLContext, certificate: str, key: str) -> None:
         certificate_path: str = ItronApi._check_file(
             certificate, "xcel_client_certificate.pem"
         )
         key_path: str = ItronApi._check_file(key, "xcel_client_key.pem")
-        LOGGER.warning("Loading certificates")
+        LOGGER.info("Loading certificates")
         ctx.load_cert_chain(certfile=certificate_path, keyfile=key_path)
-        LOGGER.warning("Certificates loaded")
+        self.certs_loaded = True
+        LOGGER.info("Certificates loaded")
 
     @staticmethod
     def _check_file(data: str, file_name: str) -> str:
@@ -151,15 +139,18 @@ class ItronApi:
         if not os.path.isfile(data) and len(data) > 100:
             # The UI replaces newlines with spaces.
             if data.startswith("-----BEGIN ") and len(data.splitlines()) == 1:
-                m = re.search("(-----.+?-----)(.+?)(-----.+?-----)", data)
-                data = (
-                    m.group(1)
-                    + os.linesep
-                    + os.linesep.join(m.group(2).strip().split())
-                    + os.linesep
-                    + m.group(3)
-                )
-                LOGGER.info(f"New data for {file_name}: {data}")
+                if (
+                    m := re.search("(-----.+?-----)(.+?)(-----.+?-----)", data)
+                ) and len(m.groups()) == 3:
+                    data = (
+                        m.group(1)
+                        + os.linesep
+                        + os.linesep.join(m.group(2).strip().split())
+                        + os.linesep
+                        + m.group(3)
+                    )
+                else:
+                    raise InvalidAuth("Invalid certificate")
             data_path = os.path.join(tempfile.gettempdir(), file_name)
             # Minimize writes; if it already exists and has the right data, we're done.
             if os.path.isfile(data_path):
@@ -244,9 +235,10 @@ class ItronRivaGen5(SensorEntity):
 class ItronRivaGen5Power(ItronRivaGen5):
     """Get the current power usage in the past second."""
 
-    device_class = SensorDeviceClass.POWER
-    state_class = SensorStateClass.MEASUREMENT
-    native_unit_of_measurement = UnitOfPower.WATT
+    _attr_name = "Itron Riva Gen 5 Power Meter"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfPower.WATT
 
     def __init__(self, api: ItronApi) -> None:
         """Initialize the sensor.
@@ -261,9 +253,10 @@ class ItronRivaGen5Power(ItronRivaGen5):
 class ItronRivaGen5Consumption(ItronRivaGen5):
     """Get the power consumption total."""
 
-    device_class = SensorDeviceClass.ENERGY
-    state_class = SensorStateClass.TOTAL
-    native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
+    _attr_name = "Itron Riva Gen 5 Power Consumption"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
 
     def __init__(self, api: ItronApi) -> None:
         """Initialize the sensor.
@@ -282,9 +275,10 @@ class ItronRivaGen5Consumption(ItronRivaGen5):
 class ItronRivaGen5Production(ItronRivaGen5):
     """Get the power production total."""
 
-    device_class = SensorDeviceClass.ENERGY
-    state_class = SensorStateClass.TOTAL
-    native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
+    _attr_name = "Itron Riva Gen 5 Power Production"
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
 
     def __init__(self, api: ItronApi) -> None:
         """Initialize the sensor.

@@ -1420,10 +1420,6 @@ DHCP: Final[list[dict[str, str | bool]]] = [
         "macaddress": "B42330*",
     },
     {
-        "domain": "xcelenergy",
-        "registered_devices": True,
-    },
-    {
         "domain": "yale",
         "hostname": "yale-connect-plus",
         "macaddress": "00177A*",

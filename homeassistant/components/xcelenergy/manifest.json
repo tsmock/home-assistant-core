@@ -6,17 +6,11 @@
   "dhcp": [
     {
       "macaddress": "B42330*"
-    },
-    {
-      "registered_devices": true
     }
   ],
   "documentation": "https://www.home-assistant.io/integrations/xcelenergy",
-  "homekit": {},
   "integration_type": "hub",
   "iot_class": "local_polling",
   "quality_scale": "bronze",
-  "requirements": ["defusedxml==0.7.1"],
-  "ssdp": [],
-  "zeroconf": []
+  "requirements": ["defusedxml==0.7.1"]
 }
