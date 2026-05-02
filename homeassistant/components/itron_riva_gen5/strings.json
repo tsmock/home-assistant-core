@@ -8,6 +8,7 @@
           "client_key": "Upload private key file"
         },
         "data_description": {
+          "host": "[%key:common::config_flow::data_description::host%]",
           "client_certificate": "The client certificate to authenticate against your power meter",
           "client_key": "The private key that belongs to your client certificate"
         }
