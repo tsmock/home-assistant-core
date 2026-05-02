@@ -9,6 +9,7 @@ import os.path
 import re
 import ssl
 import tempfile
+from typing import Union
 
 from defusedxml import ElementTree
 import httpx
@@ -48,7 +49,7 @@ class ItronApi:
 
     def __init__(
         self,
-        hass: HomeAssistant,
+        hass: HomeAssistant | None,
         host: str,
         certificate: str,
         key: str,
@@ -58,7 +59,7 @@ class ItronApi:
 
         Note that you must wait for the certificates to be loaded prior to network calls
 
-        @param hass The home assistant instance to use for async callsa
+        @param hass The home assistant instance to use for async calls
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
@@ -68,6 +69,7 @@ class ItronApi:
             hass=hass, host=host, certificate=certificate, key=key, cadata=cadata
         )
         self.certs_loaded: bool = False
+        self.debug: Union[bool,str] = False
 
     async def wait_for_session(self) -> None:
         """Wait for the client session to be ready."""
@@ -75,7 +77,7 @@ class ItronApi:
             await asyncio.sleep(0.5)
 
     def _generate_session(
-        self, hass: HomeAssistant, host: str, certificate: str, key: str, cadata: str
+        self, hass: HomeAssistant | None, host: str, certificate: str, key: str, cadata: str
     ) -> httpx.Client:
         ctx: ssl.SSLContext = self._setup_context(
             hass=hass, certificate=certificate, key=key, cadata=cadata
@@ -96,7 +98,10 @@ class ItronApi:
         @param cadata The root certificate for the self-signed certificate for the power meter
         """
         # Yes, this is deprecated. Can't do anything about it right now.
-        temp_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_2)
+        temp_context = ssl.SSLContext()#protocol=ssl.PROTOCOL_TLS_CLIENT)
+        temp_context.hostname_checks_common_name = False
+        temp_context.check_hostname = False
+        temp_context.options |= ssl.OP_LEGACY_SERVER_CONNECT
         # Only supports TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8 (ECDHE-ECDSA-AES128-CCM8)
         temp_context.set_ciphers("@SECLEVEL=0:ALL")
         # Unfortunately this is necessary
@@ -177,6 +182,9 @@ class ItronApi:
         if not response.is_success:
             LOGGER.warning(response.text)
 
+        if self.debug and type(self.debug) is str:
+            with open(os.path.join(self.debug, response.headers['date'] + path.replace('/', '.') + '.xml'), 'w') as debug_file:
+                debug_file.write(response.text)
         response.raise_for_status()
         return response.text
 

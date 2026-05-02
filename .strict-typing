@@ -308,6 +308,7 @@ homeassistant.components.iron_os.*
 homeassistant.components.isal.*
 homeassistant.components.islamic_prayer_times.*
 homeassistant.components.isy994.*
+homeassistant.components.itron_riva_gen5.*
 homeassistant.components.jellyfin.*
 homeassistant.components.jewish_calendar.*
 homeassistant.components.jvc_projector.*
@@ -616,7 +617,6 @@ homeassistant.components.wled.*
 homeassistant.components.workday.*
 homeassistant.components.worldclock.*
 homeassistant.components.xbox.*
-homeassistant.components.xcelenergy.*
 homeassistant.components.xiaomi_ble.*
 homeassistant.components.yale_smart_alarm.*
 homeassistant.components.yalexs_ble.*

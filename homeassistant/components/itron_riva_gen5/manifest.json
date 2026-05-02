@@ -1,6 +1,6 @@
 {
-  "domain": "xcelenergy",
-  "name": "Xcel Energy",
+  "domain": "itron_riva_gen5",
+  "name": "Itron Riva Gen5 (Xcel Energy)",
   "codeowners": ["@tsmock"],
   "config_flow": true,
   "dhcp": [
@@ -12,5 +12,6 @@
   "integration_type": "hub",
   "iot_class": "local_polling",
   "quality_scale": "bronze",
+  "version": "0.0.1",
   "requirements": ["defusedxml==0.7.1"]
 }

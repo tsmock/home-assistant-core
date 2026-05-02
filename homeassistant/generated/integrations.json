@@ -3336,6 +3336,12 @@
       "config_flow": true,
       "iot_class": "local_push"
     },
+    "itron_riva_gen5": {
+      "name": "Itron Riva Gen5 (Xcel Energy)",
+      "integration_type": "hub",
+      "config_flow": true,
+      "iot_class": "local_polling"
+    },
     "ituran": {
       "name": "Ituran",
       "integration_type": "hub",
@@ -7900,12 +7906,6 @@
       "name": "Heyu X10",
       "integration_type": "hub",
       "config_flow": false,
-      "iot_class": "local_polling"
-    },
-    "xcelenergy": {
-      "name": "Xcel Energy",
-      "integration_type": "hub",
-      "config_flow": true,
       "iot_class": "local_polling"
     },
     "xeoma": {
