@@ -29,18 +29,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: XcelConfigEntry) -> bool
     api: ItronApi = ItronApi(
         hass=hass, host=host, key=client_key, certificate=client_cert, cadata=ITRON_CERT
     )
+    await api.wait_for_session()
 
     # 2. Validate the API connection (and authentication)
     power: ItronRivaGen5Power = ItronRivaGen5Power(api)
-    await power.api.wait_for_session()
     future = hass.async_add_executor_job(power.async_update)
     result: int | None = await future
     _LOGGER.info("Power is currently: %s", result)
     if future.exception() is not None:
         raise ConfigEntryNotReady from future.exception()
 
-    # TODO 3. Store an API object for your platforms to access
-    # entry.runtime_data = MyAPI(...)
+    # 3. Store an API object for your platforms to access
     entry.runtime_data = api
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
