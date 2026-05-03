@@ -34,7 +34,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: XcelConfigEntry) -> bool
     # 2. Validate the API connection (and authentication)
     power: ItronRivaGen5Power = ItronRivaGen5Power(api)
     future = hass.async_add_executor_job(power.async_update)
-    result: int | None = await future
+    result: int | None = await (await future)
     _LOGGER.info("Power is currently: %s", result)
     if future.exception() is not None:
         raise ConfigEntryNotReady from future.exception()

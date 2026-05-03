@@ -206,7 +206,7 @@ class ItronRivaGen5(SensorEntity):
         self.api = api
         self.path = path
 
-    def async_update(self) -> int | None:
+    async def async_update(self) -> int | None:
         """Update the sensor.
 
         @return The updated sensor value.

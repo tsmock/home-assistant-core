@@ -48,7 +48,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     consumption = ItronRivaGen5Consumption(api)
 
     # consumption will almost never be 0. AFAIK, it is an always incrementing number.
-    consumption.async_update()
+    await consumption.async_update()
     if not consumption.native_value:
         raise InvalidAuth
 
@@ -72,7 +72,7 @@ class XcelConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_dhcp(
         self, discovery_info: DhcpServiceInfo
     ) -> ConfigFlowResult:
-        # TODO: Filter out devices that aren't listening on 8081?
+        # TODO: Filter out devices that aren't listening on 8081? And don't have the right SSL cert?
         _LOGGER.warning(f"DHCP discovery: {discovery_info.macaddress}")
         await self.async_set_unique_id(discovery_info.macaddress)
         self._abort_if_unique_id_configured(updates={CONF_HOST: discovery_info.ip})
