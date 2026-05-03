@@ -4,6 +4,8 @@
 # See https://community.home-assistant.io/t/xcel-energy-itron-gen-5-riva/346943/58 for where the URLs came from.
 # This *may* be able to be generified to a generic Itron integration for newer meters, but I don't know.
 import asyncio
+from asyncio import Future
+
 from datetime import timedelta
 import os.path
 import re
@@ -13,6 +15,7 @@ from typing import Union
 
 from defusedxml import ElementTree
 import httpx
+import logging
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -21,28 +24,16 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HassJob, HassJobType, HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
-from ..const import LOGGER
 from ..exceptions import CannotConnect, InvalidAuth
+
+from .certs import ITRON_CERT
+
+LOGGER = logging.getLogger(__name__)
 
 # The power reading only has the last second, but HA doesn't allow for <5s/update
 SCAN_INTERVAL = timedelta(seconds=5)
-
-# Hopefully this doesn't change. If it does,
-# echo | openssl s_client -showcerts -servername ${IP} -connect ${IP}:8081 -xkey key.pem -xcert cert.pem -legacy_renegotiation -tls1_2 -cipher 'ALL:@SECLEVEL=0' 2>/dev/null | openssl x509 -inform pem -noout -text
-# should get the new certificate
-ITRON_CERT = """-----BEGIN CERTIFICATE-----
-MIIBlDCCATmgAwIBAgIBATAKBggqhkjOPQQDAjArMQ4wDAYDVQQKDAVJdHJvbjEZ
-MBcGA1UEAwwQSUVFRSAyMDMwLjUgUm9vdDAgFw0yMDEwMTYyMTI0NDhaGA85OTk5
-MTIzMTIzNTk1OVowKzEOMAwGA1UECgwFSXRyb24xGTAXBgNVBAMMEElFRUUgMjAz
-MC41IFJvb3QwWTATBgcqhkjOPQIBBggqhkjOPQMBBwNCAARpgDgTQhc5zoATkAs9
-UWbT9uRau6GEb1R/1iPGLk+HAAOyAu3SkKHTwVGgzUPl73P9KMH9ZD4nSIQ5o2qJ
-Mpuuo0wwSjAOBgNVHQ8BAf8EBAMCAQYwFAYDVR0gAQH/BAowCDAGBgRVHSAAMA8G
-A1UdEwEB/wQFMAMBAf8wEQYDVR0OBAoECE4E78JKsqrnMAoGCCqGSM49BAMCA0kA
-MEYCIQC4QuurwLz8N3Vp8vQJeTrXTSKplgtW3o+GLpUzbwt2awIhAPHKAZEk3d4c
-55Ksb/AIXwrGwsrbsD75WmfKX9DjOc60
------END CERTIFICATE-----"""
-
 
 class ItronApi:
     """An API instance."""
@@ -65,14 +56,20 @@ class ItronApi:
         @param key The client key to use (a path, not the actual key)
         @param cadata The root certificate for the self-signed certificate for the power meter
         """
+        self.certs_loaded: bool | Future[None] = False
+        self.debug: Union[bool,str] = False
+        self.hass: HomeAssistant | None = hass
         self.session: httpx.Client = self._generate_session(
             hass=hass, host=host, certificate=certificate, key=key, cadata=cadata
         )
-        self.certs_loaded: bool = False
-        self.debug: Union[bool,str] = False
 
     async def wait_for_session(self) -> None:
         """Wait for the client session to be ready."""
+        future = self.certs_loaded
+        if isinstance(future, Future):
+            await future
+            if future.exception() is not None:
+                raise ConfigEntryNotReady from future.exception()
         while not self.certs_loaded:
             await asyncio.sleep(0.5)
 
@@ -98,7 +95,7 @@ class ItronApi:
         @param cadata The root certificate for the self-signed certificate for the power meter
         """
         # Yes, this is deprecated. Can't do anything about it right now.
-        temp_context = ssl.SSLContext()#protocol=ssl.PROTOCOL_TLS_CLIENT)
+        temp_context = ssl.SSLContext(protocol=ssl.PROTOCOL_TLSv1_2)
         temp_context.hostname_checks_common_name = False
         temp_context.check_hostname = False
         temp_context.options |= ssl.OP_LEGACY_SERVER_CONNECT
@@ -110,7 +107,7 @@ class ItronApi:
         temp_context.load_verify_locations(cadata=cadata)
         if certificate and key:
             if hass:
-                hass.async_run_hass_job(
+                future = hass.async_run_hass_job(
                     HassJob(
                         name="Itron: Load certificates",
                         target=self._load_certs,
@@ -120,24 +117,28 @@ class ItronApi:
                     certificate,
                     key,
                 )
+                if future is not None and self.certs_loaded != True:
+                    self.certs_loaded = future
             else:
-                asyncio.get_event_loop().run_in_executor(
+                future = asyncio.get_event_loop().run_in_executor(
                     None, self._load_certs, temp_context, certificate, key
                 )
+                if future is not None and self.certs_loaded != True:
+                    self.certs_loaded = future
         return temp_context
 
     def _load_certs(self, ctx: ssl.SSLContext, certificate: str, key: str) -> None:
         certificate_path: str = ItronApi._check_file(
-            certificate, "xcel_client_certificate.pem"
+            self.hass, certificate, "xcel_client_certificate.pem"
         )
-        key_path: str = ItronApi._check_file(key, "xcel_client_key.pem")
+        key_path: str = ItronApi._check_file(self.hass, key, "xcel_client_key.pem")
         LOGGER.info("Loading certificates")
         ctx.load_cert_chain(certfile=certificate_path, keyfile=key_path)
         self.certs_loaded = True
         LOGGER.info("Certificates loaded")
 
     @staticmethod
-    def _check_file(data: str, file_name: str) -> str:
+    def _check_file(hass: HomeAssistant | None, data: str, file_name: str) -> str:
         # I don't like this, but python does not support in-memory certificates
         # So we need to store the client certificate and key to file. For now, we write them to the /tmp directory.
         # If only so that they are (hopefully) cleaned up on reboot.
@@ -156,7 +157,7 @@ class ItronApi:
                     )
                 else:
                     raise InvalidAuth("Invalid certificate")
-            data_path = os.path.join(tempfile.gettempdir(), file_name)
+            data_path = hass.config.cache_path(file_name) if hass else os.path.join(tempfile.gettempdir(), file_name)
             # Minimize writes; if it already exists and has the right data, we're done.
             if os.path.isfile(data_path):
                 with open(data_path, encoding="ascii") as cert_file:
@@ -178,14 +179,17 @@ class ItronApi:
         except httpx.ConnectError as e:
             raise CannotConnect from e
 
-        LOGGER.warning(response.text)  # FIXME: Remove
         if not response.is_success:
-            LOGGER.warning(response.text)
+            LOGGER.warning(f"Failed: {response.text}")
+        else:
+            LOGGER.warning(response.text)  # FIXME: Remove
 
         if self.debug and type(self.debug) is str:
             with open(os.path.join(self.debug, response.headers['date'] + path.replace('/', '.') + '.xml'), 'w') as debug_file:
                 debug_file.write(response.text)
+        LOGGER.info("Checking status")
         response.raise_for_status()
+        LOGGER.info("Fetched data")
         return response.text
 
 
@@ -234,6 +238,7 @@ class ItronRivaGen5(SensorEntity):
                 return value
         else:
             LOGGER.warning(text)  # TODO Might want to raise. I don't know yet.
+            LOGGER.warning(f"{self.path}: {len(values)} values, {len(duration)} duration, {len(start)} start, {len(quality_flags)} quality_flags")
         return None
 
     def _validate(self, value: int) -> bool:

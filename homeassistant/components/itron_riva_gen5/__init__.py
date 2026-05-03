@@ -1,6 +1,7 @@
 """The Xcel Energy integration."""
 
 from __future__ import annotations
+import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, Platform
@@ -10,6 +11,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from .const import CONF_CERTIFICATE, CONF_KEY
 from .sensor.itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Power
 
+_LOGGER = logging.getLogger(__name__)
 # For your initial PR, limit it to 1 platform.
 _PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -30,8 +32,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: XcelConfigEntry) -> bool
 
     # 2. Validate the API connection (and authentication)
     power: ItronRivaGen5Power = ItronRivaGen5Power(api)
-    if await hass.async_add_executor_job(power.async_update):
-        raise ConfigEntryNotReady
+    await power.api.wait_for_session()
+    future = hass.async_add_executor_job(power.async_update)
+    result: int | None = await future
+    _LOGGER.info("Power is currently: %s", result)
+    if future.exception() is not None:
+        raise ConfigEntryNotReady from future.exception()
 
     # TODO 3. Store an API object for your platforms to access
     # entry.runtime_data = MyAPI(...)

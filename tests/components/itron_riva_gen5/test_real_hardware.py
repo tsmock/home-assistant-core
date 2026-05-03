@@ -12,9 +12,9 @@ FIXME: DO NOT COMMIT
 TEST_KEY: str = """-----BEGIN PRIVATE KEY-----
 FIXME: DO NOT COMMIT
 -----END PRIVATE KEY-----"""
-with open(os.path.join(os.path.dirname(__file__), "data", 'cert.pem'), 'r') as f:
+with open(os.path.join(os.path.dirname(__file__), 'cert.pem'), 'r') as f:
     TEST_CERT = f.read()
-with open(os.path.join(os.path.dirname(__file__), "data", 'key.pem'), 'r') as f:
+with open(os.path.join(os.path.dirname(__file__), 'key.pem'), 'r') as f:
     TEST_KEY = f.read()
 
 def test_real_data():

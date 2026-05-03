@@ -1,4 +1,4 @@
-"""Common exceptions for the xcelenergy integration."""
+"""Common exceptions for the itron_riva_gen5 integration."""
 
 from homeassistant.exceptions import HomeAssistantError
 

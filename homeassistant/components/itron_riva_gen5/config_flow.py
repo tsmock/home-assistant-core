@@ -10,6 +10,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 
 from .const import CONF_CERTIFICATE, CONF_KEY, DOMAIN
 from .exceptions import CannotConnect, InvalidAuth
@@ -19,14 +20,14 @@ _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST): str,
+        vol.Required(CONF_HOST): cv.string, # really cv.url_no_path, but it doesn't seem to work
         vol.Required(
             CONF_CERTIFICATE,
             description="PEM certificate for communicating with xcel meter",
-        ): str,
+        ): cv.string, # I'd prefer cv.string_with_no_html, but that doesn't seem to work.
         vol.Required(
             CONF_KEY, description="Key for communicating with xcel meter"
-        ): str,
+        ): cv.string, # I'd prefer cv.string_with_no_html, but that doesn't seem to work.
     }
 )
 
@@ -36,6 +37,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
     Data has the keys from STEP_USER_DATA_SCHEMA with values provided by the user.
     """
+    cv.url_no_path(data[CONF_HOST]) # For whatever reason, I can't do this in vol.Schema above. I'm probably misunderstanding something.
+    vol.Any(vol.PathExists(data[CONF_CERTIFICATE]), vol.All(vol.Contains("-----BEGIN CERTIFICATE-----", data[CONF_CERTIFICATE]), vol.Contains("-----END CERTIFICATE-----", data[CONF_CERTIFICATE])))
+    vol.Any(vol.PathExists(data[CONF_KEY]), vol.All(vol.Contains("-----BEGIN PRIVATE KEY-----", data[CONF_KEY]), vol.Contains("-----END PRIVATE KEY-----", data[CONF_KEY])))
+    cv.string_with_no_html(data[CONF_KEY])
+    cv.string_with_no_html(data[CONF_CERTIFICATE])
     # TODO validate the data can be used to set up a connection.
 
     # If your PyPI package is not built with async, pass your methods
@@ -65,7 +71,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     # InvalidAuth
 
     # Return info that you want to store in the config entry.
-    return {"title": "Xcel Energy"}
+    return {"title": "Itron Riva Gen 5", "data": {CONF_HOST: data[CONF_HOST], CONF_CERTIFICATE: data[CONF_CERTIFICATE], CONF_KEY: data[CONF_KEY]}}
 
 
 class XcelConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -78,7 +84,7 @@ class XcelConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Handle the initial step."""
         errors: dict[str, str] = {}
-        _LOGGER.error(user_input)
+        _LOGGER.error(f"user_input: {user_input}")
         if user_input is not None:
             self._async_abort_entries_match({CONF_HOST: user_input[CONF_HOST]})
             try:
@@ -87,8 +93,8 @@ class XcelConfigFlow(ConfigFlow, domain=DOMAIN):
                 errors["base"] = "cannot_connect"
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
-            except Exception:
-                _LOGGER.exception("Unexpected exception")
+            except Exception as e:
+                _LOGGER.exception("Unexpected exception", exc_info=e)
                 errors["base"] = "unknown"
             else:
                 return self.async_create_entry(title=info["title"], data=user_input)

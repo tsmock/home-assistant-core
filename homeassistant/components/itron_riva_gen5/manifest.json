@@ -8,8 +8,8 @@
       "macaddress": "B42330*"
     }
   ],
-  "documentation": "https://www.home-assistant.io/integrations/xcelenergy",
-  "integration_type": "hub",
+  "documentation": "https://www.home-assistant.io/integrations/itron_riva_gen5",
+  "integration_type": "device",
   "iot_class": "local_polling",
   "quality_scale": "bronze",
   "version": "0.0.1",

@@ -3,7 +3,7 @@
 from logging import Logger, getLogger
 from typing import Final
 
-DOMAIN: Final[str] = "xcelenergy"
+DOMAIN: Final[str] = "itron_riva_gen5"
 LOGGER: Final[Logger] = getLogger(__package__)
 
 CONF_CERTIFICATE: Final[str] = "client_certificate"
