@@ -10,6 +10,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import CONF_CERTIFICATE, CONF_KEY
 from .sensor.itron_riva_gen5 import ITRON_CERT, ItronApi, ItronRivaGen5Power
+from .coordinator import IEEE2030_5_Coordinator
 
 _LOGGER = logging.getLogger(__name__)
 # For your initial PR, limit it to 1 platform.
@@ -32,15 +33,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: XcelConfigEntry) -> bool
     await api.wait_for_session()
 
     # 2. Validate the API connection (and authentication)
-    power: ItronRivaGen5Power = ItronRivaGen5Power(api)
-    future = hass.async_add_executor_job(power.async_update)
-    result: int | None = await (await future)
+    result: str = api.fetch("/upt/1/mr/1/r")
     _LOGGER.info("Power is currently: %s", result)
-    if future.exception() is not None:
-        raise ConfigEntryNotReady from future.exception()
 
     # 3. Store an API object for your platforms to access
-    entry.runtime_data = api
+    entry.runtime_data = IEEE2030_5_Coordinator(hass=hass, config_entry=entry, api=api)
 
     await hass.config_entries.async_forward_entry_setups(entry, _PLATFORMS)
 

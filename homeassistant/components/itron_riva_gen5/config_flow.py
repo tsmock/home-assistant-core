@@ -68,6 +68,7 @@ class XcelConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def __init__(self):
         self.ip_address: str | None = None
+        self._polling: bool = True
 
     async def async_step_dhcp(
         self, discovery_info: DhcpServiceInfo

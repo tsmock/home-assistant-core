@@ -29,9 +29,11 @@ LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback) -> None:
     """Set up Xcel Energy from a config entry."""
 
-    api: ItronApi = entry.runtime_data
-    consumption = ItronRivaGen5Consumption(api)
-    power: ItronRivaGen5Power = ItronRivaGen5Power(api)
-    production = ItronRivaGen5Production(api)
-
-    async_add_entities([consumption, power, production])
+    if isinstance(entry.runtime_data, ItronApi):
+        api: ItronApi = entry.runtime_data
+        consumption = ItronRivaGen5Consumption(api)
+        power: ItronRivaGen5Power = ItronRivaGen5Power(api)
+        production = ItronRivaGen5Production(api)
+        async_add_entities([consumption, power, production])
+    else:
+        async_add_entities([entry.runtime_data.consumption, entry.runtime_data.power, entry.runtime_data.production])

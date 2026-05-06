@@ -25,15 +25,13 @@ from homeassistant.components.sensor import (
 from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HassJob, HassJobType, HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.update_coordinator import CoordinatorEntity, DataUpdateCoordinator
 
 from ..exceptions import CannotConnect, InvalidAuth
 
 from .certs import ITRON_CERT
 
 LOGGER = logging.getLogger(__name__)
-
-# The power reading only has the last second, but HA doesn't allow for <5s/update
-SCAN_INTERVAL = timedelta(seconds=5)
 
 class ItronApi:
     """An API instance."""
@@ -193,16 +191,17 @@ class ItronApi:
         return response.text
 
 
-class ItronRivaGen5(SensorEntity):
+class ItronRivaGen5(CoordinatorEntity, SensorEntity):
     """Parent class for Itron Riva Gen5 sensors."""
 
-    def __init__(self, api: ItronApi, path: str) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator[None], context, api: ItronApi, path: str) -> None:
         """Initialize the sensor.
 
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
         """
+        super().__init__(coordinator, context=context)
         self.api = api
         self.path = path
 
@@ -253,14 +252,14 @@ class ItronRivaGen5Power(ItronRivaGen5):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_native_unit_of_measurement = UnitOfPower.WATT
 
-    def __init__(self, api: ItronApi) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator[None], context, api: ItronApi) -> None:
         """Initialize the sensor.
 
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
         """
-        super().__init__(api, "/upt/1/mr/1/r")
+        super().__init__(coordinator=coordinator, context=context, api=api, path="/upt/1/mr/1/r")
 
 
 class ItronRivaGen5Consumption(ItronRivaGen5):
@@ -271,14 +270,14 @@ class ItronRivaGen5Consumption(ItronRivaGen5):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
 
-    def __init__(self, api: ItronApi) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator[None], context, api: ItronApi) -> None:
         """Initialize the sensor.
 
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
         """
-        super().__init__(api, "/upt/1/mr/3/r")
+        super().__init__(coordinator=coordinator, context=context, api=api, path="/upt/1/mr/3/r")
 
     def _validate(self, value: int) -> bool:
         # Don't reset power consumption.
@@ -293,11 +292,11 @@ class ItronRivaGen5Production(ItronRivaGen5):
     _attr_state_class = SensorStateClass.TOTAL
     _attr_native_unit_of_measurement = UnitOfEnergy.WATT_HOUR
 
-    def __init__(self, api: ItronApi) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator[None], context, api: ItronApi) -> None:
         """Initialize the sensor.
 
         @param host The host to connect to
         @param certificate The client certificate to use (a path, not the actual cert)
         @param key The client key to use (a path, not the actual key)
         """
-        super().__init__(api, "/upt/1/mr/2/r")
+        super().__init__(coordinator=coordinator, context=context, api=api, path="/upt/1/mr/2/r")
